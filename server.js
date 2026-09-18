@@ -42,6 +42,7 @@ const {
   SESSION_SECRET,
   ANTHROPIC_MODEL = 'claude-sonnet-4-6',
   PORT = 3000,
+  DATA_DIR,
 } = process.env;
 
 // --- Fail fast on misconfiguration -----------------------------------------
@@ -129,6 +130,24 @@ app.post('/api/logout', (req, res) => {
 
 app.get('/api/session', (req, res) => {
   res.json({ authed: isAuthed(req) });
+});
+
+// ============================================================================
+// CLIENT SETTINGS — saved server-side, shared by everyone using this tool.
+// Stored under DATA_DIR (point that at a persistent disk in production).
+// ============================================================================
+const dataDir = DATA_DIR || path.join(__dirname, 'data');
+fs.mkdirSync(dataDir, { recursive: true });
+const settingsPath = path.join(dataDir, 'settings.json');
+const SETTINGS_KEYS = ['brand','url','copyright','author','email','keywords','titleTpl','descTpl','format','maxDim','quality','renameMode','pattern','manufacturer','color','style','product','room','aiStyle','vendor','appendBrand'];
+function readSettings() { try { return JSON.parse(fs.readFileSync(settingsPath, 'utf8')); } catch { return null; } }
+app.get('/api/settings', requireAuth, (req, res) => { res.json(readSettings() || {}); });
+app.put('/api/settings', requireAuth, (req, res) => {
+  const body = req.body || {};
+  const out = {};
+  for (const k of SETTINGS_KEYS) if (k in body) out[k] = typeof body[k] === 'string' ? body[k].slice(0, 4000) : body[k];
+  fs.writeFileSync(settingsPath, JSON.stringify(out, null, 2));
+  res.json({ ok: true });
 });
 
 // ============================================================================
