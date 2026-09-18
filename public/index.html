@@ -565,7 +565,15 @@
   <!-- LEFT: CONTROLS -->
   <section>
 
-    <div class="panel">
+    <div class="panel" style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap">
+      <div>
+        <div style="font-family:var(--font-display); font-weight:700; font-size:15px; color:var(--white)">Client Settings</div>
+        <div class="hint" id="settings-status" style="margin-top:3px">Edit any section below, then click Save. Applies for everyone using this tool.</div>
+      </div>
+      <button class="primary" onclick="saveSettings()">Save settings</button>
+    </div>
+
+    <div class="panel" style="margin-top:20px">
       <h2>① Ownership &amp; SEO Metadata</h2>
 
       <label>Brand / Company</label>
@@ -685,7 +693,7 @@
 
       <div id="brand-append-controls">
         <label>Vendor / Product Brand (optional)</label>
-        <input type="text" id="ai-vendor" placeholder="e.g. Jason Scott Collection" oninput="render()">
+        <input type="text" id="ai-vendor" placeholder="e.g. Omnia Leather" oninput="render()">
         <div class="hint">When filled, this is appended to each filename — e.g. ...-jason-scott-collection. Set it per batch for whichever vendor you're processing.</div>
 
         <label class="check-row"><input type="checkbox" id="ai-append-brand" checked onchange="render()"> Also append the store brand (Arizona Leather)</label>
@@ -739,6 +747,7 @@ const loginError = document.getElementById('login-error');
 function showApp() {
   loginOverlay.style.display = 'none';
   appEl.style.display = 'block';
+  loadSettings();
 }
 function showLogin() {
   loginOverlay.style.display = 'flex';
@@ -785,6 +794,40 @@ async function logout() {
 }
 
 checkSession();
+
+// ============ CLIENT SETTINGS (server-synced) ============
+const SETTINGS_MAP = { brand:'meta-brand', url:'meta-url', copyright:'meta-copyright', author:'meta-author', email:'meta-email', keywords:'meta-keywords', titleTpl:'meta-title-tpl', descTpl:'meta-desc-tpl', maxDim:'max-dim', quality:'quality', renameMode:'rename-mode', pattern:'pattern', manufacturer:'ph-manufacturer', color:'ph-color', style:'ph-style', product:'ph-product', room:'ph-room', aiStyle:'ai-style', vendor:'ai-vendor' };
+
+async function loadSettings() {
+  try {
+    const r = await fetch('/api/settings', { credentials: 'same-origin' });
+    if (!r.ok) return;
+    const s = await r.json();
+    for (const [k, id] of Object.entries(SETTINGS_MAP)) {
+      if (s[k] !== undefined) { const el = document.getElementById(id); if (el) el.value = s[k]; }
+    }
+    if (s.format) {
+      outputFormat = s.format;
+      document.querySelectorAll('#format-pills .pill').forEach(p => p.classList.toggle('active', p.dataset.format === s.format));
+    }
+    if (s.appendBrand !== undefined) { const cb = document.getElementById('ai-append-brand'); if (cb) cb.checked = !!s.appendBrand; }
+  } catch {}
+  updateRenameUI();
+}
+
+async function saveSettings() {
+  const s = {};
+  for (const [k, id] of Object.entries(SETTINGS_MAP)) { const el = document.getElementById(id); if (el) s[k] = el.value; }
+  s.format = outputFormat;
+  const cb = document.getElementById('ai-append-brand'); s.appendBrand = cb ? cb.checked : true;
+  const st = document.getElementById('settings-status');
+  try {
+    const r = await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(s) });
+    if (r.status === 401) { showLogin(); return; }
+    if (r.ok) { if (st) st.textContent = 'Saved ✓ These settings now load for everyone using this tool.'; showToast('Settings saved'); }
+    else if (st) st.textContent = 'Could not save — check your connection.';
+  } catch { if (st) st.textContent = 'Could not save — check your connection.'; }
+}
 
 // ============ STATE ============
 let images = []; // {id, file, dataUrl, width, height, status, newName, customName, aiSuggested, processedBlob, processedSize}
